@@ -7,7 +7,6 @@ Select the settings module with the ``DJANGO_SETTINGS_MODULE`` env var,
 e.g. ``config.settings.dev`` (default) or ``config.settings.production``.
 """
 
-import sys
 from pathlib import Path
 
 import environ
@@ -16,9 +15,9 @@ import environ
 # base.py lives in config/settings/, so go up three levels to the repo root.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Make the `apps/` directory importable so Django apps placed there can be
-# referenced by their own name (e.g. INSTALLED_APPS = [..., "pacientes"]).
-sys.path.insert(0, str(BASE_DIR / "apps"))
+# Las apps viven bajo `apps/` y se referencian por su ruta completa
+# (INSTALLED_APPS = [..., "apps.pacientes"]); cada AppConfig fija además su
+# `label` corto. Importá siempre modelos por esa ruta (apps.pacientes.models).
 
 # ---------------------------------------------------------------------------
 # Environment
@@ -47,6 +46,10 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "apps.users",
+    "apps.pacientes",
+    "apps.citas",
+    "apps.ventas",
 ]
 
 THIRD_PARTY_APPS = [
@@ -125,6 +128,10 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 
+# Uploaded files (documentos de la historia clínica: DNI, radiografías, etc.)
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
@@ -137,9 +144,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
-    "DEFAULT_PAGINATION_CLASS": (
-        "rest_framework.pagination.PageNumberPagination"
-    ),
+    "DEFAULT_PAGINATION_CLASS": "shared.pagination.StandardPagination",
     "PAGE_SIZE": 20,
 }
 
@@ -147,3 +152,8 @@ REST_FRAMEWORK = {
 # CORS
 # ---------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
+
+#---------------------------------------
+# AUTHDJANGO
+#---------------------------------
+AUTH_USER_MODEL = "users.User"
