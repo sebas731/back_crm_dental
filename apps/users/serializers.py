@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+
+from shared.permissions import ROLES_ADMINISTRATIVOS
 
 from .models import UserProfile
 
@@ -25,6 +28,23 @@ class UserSerializer(serializers.ModelSerializer):
             "password",
         ]
         read_only_fields = ["is_staff"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Solo un administrativo puede asignar rol o (des)activar cuentas.
+        # Para el resto, estos campos son de solo lectura: evita que un usuario
+        # se autoascienda a ADMIN vía PATCH sobre su propia cuenta.
+        request = self.context.get("request")
+        rol = getattr(getattr(request, "user", None), "rol", None)
+        if rol not in ROLES_ADMINISTRATIVOS:
+            for campo in ("rol", "is_active"):
+                if campo in self.fields:
+                    self.fields[campo].read_only = True
+
+    def validate_password(self, value):
+        # Aplica los validadores de contraseña de Django (longitud, comunes…).
+        validate_password(value)
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)

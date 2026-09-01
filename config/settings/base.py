@@ -146,6 +146,7 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "shared.pagination.StandardPagination",
     "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "shared.exceptions.custom_exception_handler",
 }
 
 # ---------------------------------------------------------------------------

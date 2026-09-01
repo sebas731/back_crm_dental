@@ -8,7 +8,8 @@ class User(AbstractUser):
     ROLES =[
         ("ADMIN","SOPORTE"),
         ("MANAGER","ADMINISTRADOR"),
-        ("ASSISTANT","ASISTENTE")
+        ("ASSISTANT","ASISTENTE"),
+        ("MEDICO","MÉDICO")
     ]
 
     rol = models.CharField(max_length=150,choices=ROLES,default="ASSISTANT")

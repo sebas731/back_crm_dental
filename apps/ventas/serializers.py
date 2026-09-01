@@ -1,6 +1,10 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from .models import Adicional, Cuota, Descuento, Pago, Venta, VentaServicio
+
+CERO = Decimal("0")
 
 
 class VentaServicioSerializer(serializers.ModelSerializer):
@@ -12,11 +16,37 @@ class VentaServicioSerializer(serializers.ModelSerializer):
         model = VentaServicio
         fields = "__all__"
 
+    def validate_precio_unitario(self, value):
+        if value is not None and value < CERO:
+            raise serializers.ValidationError("El precio no puede ser negativo.")
+        return value
+
+    def validate_cantidad(self, value):
+        if value is not None and value < 1:
+            raise serializers.ValidationError("La cantidad debe ser al menos 1.")
+        return value
+
 
 class DescuentoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Descuento
         fields = "__all__"
+
+    def validate(self, attrs):
+        tipo = attrs.get("tipo") or getattr(self.instance, "tipo", None)
+        valor = attrs.get("valor")
+        if valor is None:
+            valor = getattr(self.instance, "valor", None)
+        if valor is not None:
+            if valor < CERO:
+                raise serializers.ValidationError(
+                    "El descuento no puede ser negativo."
+                )
+            if tipo == Descuento.Tipo.PORCENTAJE and valor > Decimal("100"):
+                raise serializers.ValidationError(
+                    "Un descuento porcentual no puede superar el 100%."
+                )
+        return attrs
 
 
 class AdicionalSerializer(serializers.ModelSerializer):
@@ -28,6 +58,16 @@ class AdicionalSerializer(serializers.ModelSerializer):
         model = Adicional
         fields = "__all__"
 
+    def validate_valor(self, value):
+        if value is not None and value < CERO:
+            raise serializers.ValidationError("El valor no puede ser negativo.")
+        return value
+
+    def validate_cantidad(self, value):
+        if value is not None and value < 1:
+            raise serializers.ValidationError("La cantidad debe ser al menos 1.")
+        return value
+
 
 class PagoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,6 +75,34 @@ class PagoSerializer(serializers.ModelSerializer):
         fields = "__all__"
         # La validación se hace vía la acción /pagos/{id}/validar/.
         read_only_fields = ["validado", "validado_por", "fecha_validacion"]
+
+    def validate(self, attrs):
+        monto = attrs.get("monto")
+        if monto is None:
+            monto = getattr(self.instance, "monto", None)
+        cuota = attrs.get("cuota") or getattr(self.instance, "cuota", None)
+        if monto is not None:
+            if monto <= CERO:
+                raise serializers.ValidationError(
+                    {"monto": "El monto del pago debe ser mayor que cero."}
+                )
+            # No se puede pagar más de lo que se debe en la cuota.
+            if cuota is not None:
+                # Al editar, descontar el propio pago del total ya pagado.
+                ya_pagado = cuota.total_pagado
+                if self.instance is not None:
+                    ya_pagado -= self.instance.monto
+                disponible = (cuota.monto or CERO) - ya_pagado
+                if monto > disponible:
+                    raise serializers.ValidationError(
+                        {
+                            "monto": (
+                                f"El monto excede el saldo de la cuota "
+                                f"(disponible S/ {disponible})."
+                            )
+                        }
+                    )
+        return attrs
 
 
 class CuotaSerializer(serializers.ModelSerializer):
@@ -49,6 +117,9 @@ class CuotaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cuota
         fields = "__all__"
+        # El estado se deriva de los pagos (actualizar_estado); no se escribe
+        # a mano. Antes cualquier rol podía forzar estado=PAGADO sin pagar.
+        read_only_fields = ["estado"]
 
     def validate(self, attrs):
         # No se puede reprogramar (cambiar la fecha de) una cuota ya pagada.
@@ -78,7 +149,11 @@ class VentaSerializer(serializers.ModelSerializer):
     total_calculado = serializers.DecimalField(
         max_digits=10, decimal_places=2, read_only=True
     )
+    editable = serializers.BooleanField(read_only=True)
+    tiene_pagos_validados = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Venta
         fields = "__all__"
+        # El número se genera en el servidor (único); no se acepta del cliente.
+        read_only_fields = ["numero"]

@@ -14,6 +14,9 @@ CATALOGO: dict[str, list[str]] = {
         "Ortodoncia autoligable",
         "Ortodoncia invisible (alineadores invisibles)",
         "Retenedores fijos o removibles",
+        "Cuota de ortodoncia",
+        "Reposiciones",
+        "Otros",
     ],
     "Odontología General y Preventiva": [
         "Limpieza dental (profilaxis o detartraje)",

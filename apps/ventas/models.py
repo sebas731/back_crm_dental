@@ -16,6 +16,7 @@ Reglas:
 - Al registrar un Pago se marca la Cuota como PAGADA y se recalcula la Venta.
 """
 
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
@@ -24,6 +25,11 @@ from django.db import models
 from shared.models import BaseModel
 
 CERO = Decimal("0")
+
+
+def generar_numero_venta() -> str:
+    """Correlativo simple y único para una venta (p. ej. V-1A2B3C4D)."""
+    return f"V-{uuid.uuid4().hex[:8].upper()}"
 
 
 class Venta(BaseModel):
@@ -39,6 +45,14 @@ class Venta(BaseModel):
     numero = models.CharField(max_length=30, unique=True, blank=True)
     paciente = models.ForeignKey(
         "pacientes.Paciente", on_delete=models.PROTECT, related_name="ventas"
+    )
+    # Venta generada automáticamente al agendar una cita (1:1 opcional).
+    cita = models.OneToOneField(
+        "citas.Cita",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="venta",
     )
     tipo_pago = models.CharField(
         max_length=10, choices=TipoPago.choices, default=TipoPago.CONTADO
@@ -64,6 +78,12 @@ class Venta(BaseModel):
 
     def __str__(self):
         return f"Venta {self.numero or self.pk} - {self.paciente}"
+
+    def save(self, *args, **kwargs):
+        # Garantiza un número único aunque no se envíe (evita vacío/duplicado).
+        if not self.numero:
+            self.numero = generar_numero_venta()
+        super().save(*args, **kwargs)
 
     # --- Cálculos (derivados de las líneas) ---
     @property
@@ -92,18 +112,104 @@ class Venta(BaseModel):
     def saldo(self) -> Decimal:
         return (self.total or CERO) - self.total_pagado
 
+    def recalcular_total(self):
+        """Congela `total` a partir de las líneas (servicios/adicionales/desc.)."""
+        self.total = self.total_calculado
+        self.save(update_fields=["total", "updated_at"])
+
     def actualizar_estado(self):
         """Marca PAGADO cuando no queda saldo (no toca ventas anuladas)."""
         if self.estado == self.Estado.ANULADO:
             return
+        # Nota: se compara el saldo directamente. Antes se exigía `self.total`
+        # (verdad-ez), lo que dejaba atascada en PENDIENTE cualquier venta de
+        # total 0 (saldo 0). Ahora saldo <= 0 => PAGADO.
         nuevo = (
             self.Estado.PAGADO
-            if self.total and self.saldo <= CERO
+            if self.saldo <= CERO
             else self.Estado.PENDIENTE
         )
         if nuevo != self.estado:
             self.estado = nuevo
             self.save(update_fields=["estado", "updated_at"])
+
+    # --- Inmutabilidad (congelado de documento financiero) ---
+    @property
+    def tiene_pagos_validados(self) -> bool:
+        """¿Algún pago de la venta ya fue validado?"""
+        return any(
+            p.validado for c in self.cuotas.all() for p in c.pagos.all()
+        )
+
+    @property
+    def editable(self) -> bool:
+        """
+        Una venta se congela (no se editan sus factores: servicios,
+        adicionales, descuentos) cuando está anulada o ya tiene algún pago
+        validado. Para corregirla se duplica y se anula la original.
+        """
+        return (
+            self.estado != self.Estado.ANULADO
+            and not self.tiene_pagos_validados
+        )
+
+    def anular(self, motivo: str = ""):
+        """Anula la venta (p. ej. para devoluciones). Conserva su historial."""
+        self.estado = self.Estado.ANULADO
+        if motivo:
+            sep = "\n" if self.observaciones else ""
+            self.observaciones = f"{self.observaciones}{sep}[ANULADA] {motivo}"
+        self.save(update_fields=["estado", "observaciones", "updated_at"])
+        return self
+
+    def duplicar(self, usuario=None):
+        """
+        Crea una copia editable (nueva venta PENDIENTE) con los mismos
+        factores y cronograma, pero SIN pagos ni validaciones. Sirve para
+        rehacer una venta registrada con errores.
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            nueva = Venta.objects.create(
+                numero=generar_numero_venta(),
+                paciente=self.paciente,
+                tipo_pago=self.tipo_pago,
+                observaciones=self.observaciones,
+                registrado_por=usuario,
+                estado=Venta.Estado.PENDIENTE,
+            )
+            for s in self.servicios.all():
+                VentaServicio.objects.create(
+                    venta=nueva,
+                    servicio=s.servicio,
+                    cantidad=s.cantidad,
+                    precio_unitario=s.precio_unitario,
+                )
+            for d in self.descuentos.all():
+                Descuento.objects.create(
+                    venta=nueva,
+                    descripcion=d.descripcion,
+                    tipo=d.tipo,
+                    valor=d.valor,
+                )
+            for a in self.adicionales.all():
+                Adicional.objects.create(
+                    venta=nueva,
+                    nombre=a.nombre,
+                    tipo=a.tipo,
+                    valor=a.valor,
+                    cantidad=a.cantidad,
+                )
+            for c in self.cuotas.all():
+                Cuota.objects.create(
+                    venta=nueva,
+                    numero=c.numero,
+                    monto=c.monto,
+                    fecha_limite=c.fecha_limite,
+                )
+            nueva.recalcular_total()
+        return nueva
 
 
 class VentaServicio(BaseModel):
@@ -214,6 +320,12 @@ class Cuota(BaseModel):
         verbose_name = "Cuota"
         verbose_name_plural = "Cuotas"
         ordering = ["venta", "numero"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["venta", "numero"],
+                name="cuota_numero_unico_por_venta",
+            )
+        ]
 
     @property
     def total_pagado(self) -> Decimal:
@@ -224,9 +336,11 @@ class Cuota(BaseModel):
         return (self.monto or CERO) - self.total_pagado
 
     def actualizar_estado(self):
+        # saldo <= 0 => PAGADO (incluye cuotas de monto 0, que antes quedaban
+        # atascadas en PENDIENTE por la comprobación `self.monto`).
         nuevo = (
             self.Estado.PAGADO
-            if self.monto and self.saldo <= CERO
+            if self.saldo <= CERO
             else self.Estado.PENDIENTE
         )
         if nuevo != self.estado:

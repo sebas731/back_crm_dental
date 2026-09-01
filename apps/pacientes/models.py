@@ -213,21 +213,24 @@ class HistoriaClinica(BaseModel):
     `HistoriaClinicaDetalle`, referenciado por el FK `detalle`.
     """
 
+    # PROTECT: borrar un paciente/cliente NO debe arrasar en silencio su
+    # historia clínica (odontograma, antecedentes, documentos). Si tiene
+    # historia, primero hay que eliminarla explícitamente.
     paciente = models.OneToOneField(
-        Paciente, on_delete=models.CASCADE, related_name="historia_clinica"
+        Paciente, on_delete=models.PROTECT, related_name="historia_clinica"
     )
     numero = models.CharField(max_length=30, unique=True, blank=True)
     fecha_apertura = models.DateField(auto_now_add=True)
     observaciones = models.TextField(blank=True)
 
-    # Subclase con el detalle clínico. FK según lo pedido; puede quedar vacío
-    # hasta que se complete la ficha.
-    detalle = models.ForeignKey(
+    # Detalle clínico propio de ESTA historia (1:1) — nunca compartido entre
+    # pacientes. Puede quedar vacío hasta completar la ficha.
+    detalle = models.OneToOneField(
         HistoriaClinicaDetalle,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="historias",
+        related_name="historia",
     )
 
     class Meta:

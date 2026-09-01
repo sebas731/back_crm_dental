@@ -66,9 +66,21 @@ class Command(BaseCommand):
             admin.is_staff = True
             admin.is_superuser = True
             admin.first_name = "Admin"
-            admin.last_name = "DENTAL SAC"
+            admin.last_name = "DENTAL STUDIO"
             admin.save()
             self.stdout.write("  Usuario admin creado (admin / admin1234)")
+
+        # --- Usuario asistente (rol ASSISTANT) ---
+        asis, a_created = User.objects.get_or_create(
+            username="asistente",
+            defaults={"email": "asistente@dentalstudio.com", "rol": "ASSISTANT"},
+        )
+        if a_created:
+            asis.set_password("asistente123")
+            asis.first_name = "Ana"
+            asis.last_name = "Asistente"
+            asis.save()
+            self.stdout.write("  Usuario asistente creado (asistente / asistente123)")
 
         # --- Médicos ---
         medicos_data = [
@@ -85,9 +97,26 @@ class Command(BaseCommand):
                     "apellidos": apellidos,
                     "especialidad": esp,
                     "telefono": "999000111",
-                    "correo": f"{nombres.lower()}@dentalsac.com",
+                    "correo": f"{nombres.lower()}@dentalstudio.com",
                 },
             )
+            # Usuario médico vinculado (login: <nombre> / medico123)
+            uname = nombres.lower()
+            u, u_created = User.objects.get_or_create(
+                username=uname,
+                defaults={
+                    "email": f"{uname}@dentalstudio.com",
+                    "rol": "MEDICO",
+                    "first_name": nombres,
+                    "last_name": apellidos,
+                },
+            )
+            if u_created:
+                u.set_password("medico123")
+                u.save()
+            if m.usuario_id is None:
+                m.usuario = u
+                m.save(update_fields=["usuario"])
             medicos.append(m)
 
         # --- Horarios de atención (Lun-Vie) ---
@@ -188,6 +217,7 @@ class Command(BaseCommand):
                     numero=f"V-{cita.pk.hex[:8]}",
                     defaults={
                         "paciente": cita.paciente,
+                        "cita": cita,
                         "tipo_pago": Venta.TipoPago.CONTADO,
                         "total": precio,
                         "registrado_por": admin,

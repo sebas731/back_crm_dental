@@ -1,20 +1,31 @@
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from shared.mixins import QueryParamFilterMixin
+from shared.permissions import GestionAgenda, GestionClinica, SoloAdministrativos
 
-from .models import AtencionCita, Cita, HorarioAtencion, Medico, ServicioDental
+from .models import (
+    AtencionCita,
+    Cita,
+    HorarioAtencion,
+    Medico,
+    NotaAgenda,
+    ServicioDental,
+)
 from .serializers import (
     AtencionCitaSerializer,
     CitaSerializer,
     HorarioAtencionSerializer,
     MedicoSerializer,
+    NotaAgendaSerializer,
     ServicioDentalSerializer,
 )
 
 
 class MedicoViewSet(viewsets.ModelViewSet):
+    permission_classes = [SoloAdministrativos]
     queryset = Medico.objects.all()
     serializer_class = MedicoSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -23,6 +34,7 @@ class MedicoViewSet(viewsets.ModelViewSet):
 
 
 class ServicioDentalViewSet(viewsets.ModelViewSet):
+    permission_classes = [SoloAdministrativos]
     queryset = ServicioDental.objects.all()
     serializer_class = ServicioDentalSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -31,6 +43,7 @@ class ServicioDentalViewSet(viewsets.ModelViewSet):
 
 
 class HorarioAtencionViewSet(viewsets.ModelViewSet):
+    permission_classes = [SoloAdministrativos]
     queryset = HorarioAtencion.objects.select_related("medico")
     serializer_class = HorarioAtencionSerializer
     filter_backends = [filters.OrderingFilter]
@@ -46,6 +59,39 @@ class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["motivo", "paciente__numero_documento"]
     ordering_fields = ["fecha", "hora_inicio", "estado", "created_at"]
+
+    def get_permissions(self):
+        # El médico solo consulta y atiende; crear/editar/borrar citas es
+        # de roles clínicos (admin/manager/asistente).
+        if self.action == "atender":
+            return [IsAuthenticated()]
+        return [GestionClinica()]
+
+    def perform_create(self, serializer):
+        """Al agendar una cita con servicio con precio, genera su venta."""
+        cita = serializer.save()
+        # Solo se genera venta si el servicio tiene un precio > 0; evita
+        # ventas de S/ 0.00 que quedarían atascadas en "Pendiente".
+        precio = cita.servicio.precio if cita.servicio_id else 0
+        if precio and precio > 0:
+            from apps.ventas.models import Venta, VentaServicio
+
+            usuario = (
+                self.request.user if self.request.user.is_authenticated else None
+            )
+            venta = Venta.objects.create(
+                cita=cita,
+                paciente=cita.paciente,
+                tipo_pago=Venta.TipoPago.CONTADO,
+                total=precio,
+                registrado_por=usuario,
+            )
+            VentaServicio.objects.create(
+                venta=venta,
+                servicio=cita.servicio,
+                cantidad=1,
+                precio_unitario=precio,
+            )
 
     @action(detail=True, methods=["post"])
     def atender(self, request, pk=None):
@@ -84,7 +130,31 @@ class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
 
 class AtencionCitaViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = AtencionCita.objects.select_related("cita", "medico_atendio")
     serializer_class = AtencionCitaSerializer
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["fecha_cita", "created_at"]
+
+
+class NotaAgendaViewSet(viewsets.ModelViewSet):
+    permission_classes = [GestionAgenda]
+    serializer_class = NotaAgendaSerializer
+    queryset = NotaAgenda.objects.select_related("autor")
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        desde = self.request.query_params.get("desde")
+        hasta = self.request.query_params.get("hasta")
+        fecha = self.request.query_params.get("fecha")
+        if fecha:
+            qs = qs.filter(fecha=fecha)
+        if desde:
+            qs = qs.filter(fecha__gte=desde)
+        if hasta:
+            qs = qs.filter(fecha__lte=hasta)
+        return qs
+
+    def perform_create(self, serializer):
+        usuario = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(autor=usuario)

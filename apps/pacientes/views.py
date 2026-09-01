@@ -1,6 +1,7 @@
 from rest_framework import filters, viewsets
 
 from shared.mixins import QueryParamFilterMixin
+from shared.permissions import GestionClinica
 
 from .models import (
     Acompanante,
@@ -25,6 +26,7 @@ from .serializers import (
 
 
 class ClienteViewSet(viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -33,6 +35,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     queryset = Paciente.objects.all().prefetch_related("acompanantes")
     serializer_class = PacienteSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -46,6 +49,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
 
 class AcompananteViewSet(viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     queryset = Acompanante.objects.all()
     serializer_class = AcompananteSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -53,6 +57,7 @@ class AcompananteViewSet(viewsets.ModelViewSet):
 
 
 class HistoriaClinicaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     filterset_params = ["paciente"]
     queryset = HistoriaClinica.objects.all().prefetch_related(
         "documentos", "odontogramas"
@@ -64,11 +69,13 @@ class HistoriaClinicaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
 
 class HistoriaClinicaDetalleViewSet(viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     queryset = HistoriaClinicaDetalle.objects.all()
     serializer_class = HistoriaClinicaDetalleSerializer
 
 
 class DocumentoHistoriaClinicaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     filterset_params = ["historia_clinica", "tipo"]
     queryset = DocumentoHistoriaClinica.objects.all()
     serializer_class = DocumentoHistoriaClinicaSerializer
@@ -77,6 +84,7 @@ class DocumentoHistoriaClinicaViewSet(QueryParamFilterMixin, viewsets.ModelViewS
 
 
 class OdontogramaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     filterset_params = ["historia_clinica"]
     queryset = Odontograma.objects.all()
     serializer_class = OdontogramaSerializer
@@ -85,6 +93,7 @@ class OdontogramaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
 
 class AntecedentesPersonalesViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
     filterset_params = ["historia_clinica"]
     queryset = AntecedentesPersonales.objects.all()
     serializer_class = AntecedentesPersonalesSerializer
