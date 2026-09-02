@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from shared.validators import validar_archivo
+
 from .models import Adicional, Cuota, Descuento, Pago, Venta, VentaServicio
 
 CERO = Decimal("0")
@@ -75,6 +77,9 @@ class PagoSerializer(serializers.ModelSerializer):
         fields = "__all__"
         # La validación se hace vía la acción /pagos/{id}/validar/.
         read_only_fields = ["validado", "validado_por", "fecha_validacion"]
+
+    def validate_comprobante(self, value):
+        return validar_archivo(value)
 
     def validate(self, attrs):
         monto = attrs.get("monto")

@@ -4,8 +4,20 @@ API backend for the dental clinic CRM (patients & clinical records).
 
 **Stack:** Python · Django · Django REST Framework · SimpleJWT · PostgreSQL (sqlite in dev).
 
-> This repo is technical scaffolding only. Business apps (patients, appointments,
-> clinical records, …) live under `apps/` and are not implemented yet.
+The business apps under `apps/` are implemented:
+
+- **users** — custom `User` with roles (ADMIN, MANAGER, ASSISTANT, MEDICO) and
+  role-based access control (`shared/permissions.py`).
+- **pacientes** — Cliente/Paciente, clinical history, odontogram, documents and
+  personal antecedents.
+- **citas** — appointments, doctors, services (with sub-services), schedules,
+  attention records and agenda notes.
+- **ventas** — sales/billing: sale, line items, discounts, extras, installments
+  (cuotas) and payments with a validation flow.
+
+Auth is JWT (`/api/auth/token/`, `/api/auth/token/refresh/`) with refresh
+rotation + blacklist. See the tests in each app (`apps/*/tests.py`) for the
+security and integrity rules that are enforced.
 
 ## Requirements
 
@@ -59,7 +71,8 @@ All configuration is read from environment variables — see `.env.example`.
 
 ```
 dental-backend/
-├── apps/               # Django business apps go here (empty for now)
+├── apps/               # Business apps: users, pacientes, citas, ventas
+├── shared/             # Cross-app helpers: permissions, validators, pagination
 ├── config/
 │   ├── settings/
 │   │   ├── base.py
@@ -73,15 +86,24 @@ dental-backend/
 └── .env.example
 ```
 
-Apps placed under `apps/` are importable by their own name (e.g.
-`INSTALLED_APPS += ["pacientes"]`) because `apps/` is added to the Python path
-in `base.py`.
+Apps live under `apps/` and are referenced by their full path (e.g.
+`apps.pacientes`); each `AppConfig` sets an explicit `label`.
 
-## What's already configured
+## Configuration highlights
 
-- DRF with JWT (`rest_framework_simplejwt`) as the default authentication class.
-- `IsAuthenticated` default permission and `PageNumberPagination` (page size 20).
+- DRF with JWT (`rest_framework_simplejwt`) as the default authentication class;
+  refresh rotation + blacklist, 30-min access tokens.
+- `IsAuthenticated` default permission (per-viewset role classes on top) and
+  pagination (page size 20, `?page_size=` up to 500).
+- Custom exception handler maps `ProtectedError` to a 400 with a readable message.
 - CORS allowing the frontend origin (`CORS_ALLOWED_ORIGINS`, default `http://localhost:3000`).
 - Postgres-ready via `DATABASE_URL` (sqlite fallback in dev).
 
-No business models, serializers, views, or JWT endpoints are wired up yet.
+## Tests
+
+```bash
+python manage.py test apps
+```
+
+Covers the RBAC and data-integrity rules (privilege escalation, double-booking,
+read-only cuota state, payment validation, DNI format, protected deletes, …).

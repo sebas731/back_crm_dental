@@ -24,7 +24,7 @@ class UserViewSet(viewsets.ModelViewSet):
     ordering_fields = ["username", "date_joined"]
 
     def get_queryset(self):
-        qs = User.objects.all()
+        qs = User.objects.all().order_by("username")
         # Un usuario no administrativo solo se ve a sí mismo.
         if getattr(self.request.user, "rol", None) not in ROLES_ADMINISTRATIVOS:
             return qs.filter(pk=self.request.user.pk)

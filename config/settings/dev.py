@@ -1,5 +1,7 @@
 """Development settings."""
 
+from django.core.management.utils import get_random_secret_key
+
 from .base import *  # noqa: F401,F403
 from .base import env
 
@@ -8,6 +10,9 @@ from .base import env
 DEBUG = env("DEBUG", default=True)
 
 if not SECRET_KEY:  # noqa: F405
-    SECRET_KEY = "django-insecure-dev-only-change-me"  # noqa: F811
+    # Clave EFÍMERA y aleatoria por proceso (no una constante en el código).
+    # Al reiniciar el server cambia; para persistir sesiones en dev definí
+    # SECRET_KEY en el .env.
+    SECRET_KEY = get_random_secret_key()  # noqa: F811
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # noqa: F811

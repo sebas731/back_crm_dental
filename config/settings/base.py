@@ -7,6 +7,7 @@ Select the settings module with the ``DJANGO_SETTINGS_MODULE`` env var,
 e.g. ``config.settings.dev`` (default) or ``config.settings.production``.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -55,6 +56,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
 ]
 
@@ -147,6 +149,19 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "shared.pagination.StandardPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "shared.exceptions.custom_exception_handler",
+}
+
+# ---------------------------------------------------------------------------
+# JWT (SimpleJWT)
+# ---------------------------------------------------------------------------
+# Access de vida corta + rotación del refresh con blacklist: al refrescar se
+# emite un refresh nuevo y el anterior se invalida, de modo que un token
+# robado deja de servir en cuanto el usuario legítimo vuelve a refrescar.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 # ---------------------------------------------------------------------------
