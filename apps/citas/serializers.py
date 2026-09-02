@@ -36,10 +36,16 @@ class AtencionCitaSerializer(serializers.ModelSerializer):
 
 class CitaSerializer(serializers.ModelSerializer):
     atencion = AtencionCitaSerializer(read_only=True)
+    # Id de la orden de venta generada automáticamente (si existe).
+    venta = serializers.SerializerMethodField()
 
     class Meta:
         model = Cita
         fields = "__all__"
+
+    def get_venta(self, obj):
+        venta = getattr(obj, "venta", None)
+        return str(venta.id) if venta else None
 
     # Estados que ya no ocupan la agenda (no cuentan para el solape).
     _ESTADOS_LIBERAN = {Cita.Estado.CANCELADA, Cita.Estado.NO_ASISTIO}

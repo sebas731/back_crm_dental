@@ -53,7 +53,7 @@ class HorarioAtencionViewSet(viewsets.ModelViewSet):
 class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     filterset_params = ["paciente", "medico", "estado", "servicio", "fecha"]
     queryset = Cita.objects.select_related(
-        "paciente", "medico", "servicio"
+        "paciente", "medico", "servicio", "venta"
     ).prefetch_related("atencion")
     serializer_class = CitaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -68,14 +68,17 @@ class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return [GestionClinica()]
 
     def perform_create(self, serializer):
-        """Al agendar una cita con servicio con precio, genera su venta."""
+        """
+        Al agendar una cita con servicio se genera su orden de venta (para
+        cobrar y editar). Si el servicio aún no tiene precio, la orden queda
+        en S/ 0.00 lista para completar el monto — no queda "atascada":
+        actualizar_estado la resuelve según su saldo.
+        """
         cita = serializer.save()
-        # Solo se genera venta si el servicio tiene un precio > 0; evita
-        # ventas de S/ 0.00 que quedarían atascadas en "Pendiente".
-        precio = cita.servicio.precio if cita.servicio_id else 0
-        if precio and precio > 0:
+        if cita.servicio_id:
             from apps.ventas.models import Venta, VentaServicio
 
+            precio = cita.servicio.precio or 0
             usuario = (
                 self.request.user if self.request.user.is_authenticated else None
             )
