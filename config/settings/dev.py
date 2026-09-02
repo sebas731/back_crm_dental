@@ -10,9 +10,16 @@ from .base import env
 DEBUG = env("DEBUG", default=True)
 
 if not SECRET_KEY:  # noqa: F405
-    # Clave EFÍMERA y aleatoria por proceso (no una constante en el código).
-    # Al reiniciar el server cambia; para persistir sesiones en dev definí
-    # SECRET_KEY en el .env.
-    SECRET_KEY = get_random_secret_key()  # noqa: F811
+    # Sin SECRET_KEY en el entorno, se genera una clave aleatoria y se
+    # PERSISTE en un archivo local (git-ignored). Así no hay una constante
+    # insegura en el código y, a la vez, la clave sobrevive a los reinicios
+    # del server (no cierra la sesión de nadie en cada reinicio de dev).
+    # En producción SECRET_KEY es obligatoria (ver production.py).
+    _key_file = BASE_DIR / ".secret_key"  # noqa: F405
+    if _key_file.exists():
+        SECRET_KEY = _key_file.read_text().strip()  # noqa: F811
+    else:
+        SECRET_KEY = get_random_secret_key()  # noqa: F811
+        _key_file.write_text(SECRET_KEY)
 
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # noqa: F811

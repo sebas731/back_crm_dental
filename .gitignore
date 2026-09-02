@@ -27,6 +27,9 @@ db.sqlite3-journal
 .env.*
 !.env.example
 
+# Local dev secret key (auto-generated, never commit)
+.secret_key
+
 # Coverage / testing
 .coverage
 .coverage.*
