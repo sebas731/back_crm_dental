@@ -129,6 +129,9 @@ USE_TZ = True
 # Static files
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
+# Carpeta donde `collectstatic` reúne los estáticos para servirlos en
+# producción (admin de Django, DRF). La sirve Nginx.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Uploaded files (documentos de la historia clínica: DNI, radiografías, etc.)
 MEDIA_URL = "media/"
