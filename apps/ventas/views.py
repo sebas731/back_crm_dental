@@ -157,7 +157,16 @@ class PagoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             raise ValidationError(
                 "No se pueden registrar pagos en una venta anulada."
             )
-        serializer.save()
+        # Flujo de un solo paso: el pago queda confirmado al registrarse
+        # (no hay un paso aparte de "validar").
+        from django.utils import timezone
+
+        usuario = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(
+            validado=True,
+            validado_por=usuario,
+            fecha_validacion=timezone.now(),
+        )
 
     def perform_update(self, serializer):
         if serializer.instance.validado:
