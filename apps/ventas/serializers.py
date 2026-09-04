@@ -72,11 +72,20 @@ class AdicionalSerializer(serializers.ModelSerializer):
 
 
 class PagoSerializer(serializers.ModelSerializer):
+    registrado_por_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = Pago
         fields = "__all__"
         # La validación se hace vía la acción /pagos/{id}/validar/.
         read_only_fields = ["validado", "validado_por", "fecha_validacion"]
+
+    def get_registrado_por_nombre(self, obj):
+        u = obj.registrado_por
+        if not u:
+            return ""
+        nombre = f"{u.first_name} {u.last_name}".strip()
+        return nombre or u.username
 
     def validate_comprobante(self, value):
         return validar_archivo(value)

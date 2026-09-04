@@ -163,6 +163,7 @@ class PagoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
         usuario = self.request.user if self.request.user.is_authenticated else None
         serializer.save(
+            registrado_por=usuario,
             validado=True,
             validado_por=usuario,
             fecha_validacion=timezone.now(),
