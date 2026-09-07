@@ -104,6 +104,8 @@ class Paciente(Cliente):
     # `correo` se hereda de Cliente.
     direccion = models.CharField(max_length=255, blank=True)
     telefono = models.CharField(max_length=30, blank=True)
+    # Número al que se envían los mensajes de WhatsApp (si difiere del teléfono).
+    whatsapp = models.CharField("Número de WhatsApp", max_length=30, blank=True)
 
     class Meta:
         verbose_name = "Paciente"
