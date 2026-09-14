@@ -1,13 +1,13 @@
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from shared.mixins import QueryParamFilterMixin
 from shared.permissions import PuedeGestionarPagos
 
-from .models import Adicional, Cuota, Descuento, Pago, Venta, VentaServicio
+from . import selectors, services
+from .models import Adicional, Descuento, VentaServicio
 from .serializers import (
     AdicionalSerializer,
     CuotaSerializer,
@@ -17,19 +17,11 @@ from .serializers import (
     VentaServicioSerializer,
 )
 
-VENTA_BLOQUEADA = (
-    "La venta está bloqueada (tiene pagos validados o está anulada) y no se "
-    "pueden modificar sus servicios, adicionales ni descuentos. Duplicá la "
-    "venta para corregirla y anulá la original."
-)
-
 
 class VentaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, PuedeGestionarPagos]
     filterset_params = ["paciente", "estado", "tipo_pago"]
-    queryset = Venta.objects.select_related("paciente").prefetch_related(
-        "servicios", "descuentos", "adicionales", "cuotas__pagos"
-    )
+    queryset = selectors.venta_list()
     serializer_class = VentaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["numero", "paciente__numero_documento"]
@@ -38,20 +30,18 @@ class VentaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def anular(self, request, pk=None):
         """Anula la venta (devoluciones / errores). Conserva su historial."""
-        venta = self.get_object()
-        if venta.estado == Venta.Estado.ANULADO:
-            raise ValidationError("La venta ya está anulada.")
-        venta.anular(motivo=request.data.get("motivo", ""))
+        venta = services.venta_anular(
+            venta=self.get_object(), motivo=request.data.get("motivo", "")
+        )
         return Response(self.get_serializer(venta).data)
 
     @action(detail=True, methods=["post"])
     def duplicar(self, request, pk=None):
         """Crea una copia editable (nueva venta) sin pagos, para corregir."""
-        original = self.get_object()
-        usuario = request.user if request.user.is_authenticated else None
-        nueva = original.duplicar(usuario=usuario)
-        serializer = self.get_serializer(nueva)
-        return Response(serializer.data, status=201)
+        nueva = services.venta_duplicar(
+            original=self.get_object(), usuario=request.user
+        )
+        return Response(self.get_serializer(nueva).data, status=201)
 
 
 class RecalculaVentaMixin:
@@ -60,25 +50,21 @@ class RecalculaVentaMixin:
     Bloquea la edición si la venta está congelada (pagos validados / anulada).
     """
 
-    def _verificar_editable(self, venta):
-        if venta and not venta.editable:
-            raise ValidationError(VENTA_BLOQUEADA)
-
     def perform_create(self, serializer):
-        self._verificar_editable(serializer.validated_data.get("venta"))
+        services.venta_verificar_editable(serializer.validated_data.get("venta"))
         obj = serializer.save()
-        obj.venta.recalcular_total()
+        services.venta_recalcular(obj.venta)
 
     def perform_update(self, serializer):
-        self._verificar_editable(serializer.instance.venta)
+        services.venta_verificar_editable(serializer.instance.venta)
         obj = serializer.save()
-        obj.venta.recalcular_total()
+        services.venta_recalcular(obj.venta)
 
     def perform_destroy(self, instance):
-        self._verificar_editable(instance.venta)
+        services.venta_verificar_editable(instance.venta)
         venta = instance.venta
         instance.delete()
-        venta.recalcular_total()
+        services.venta_recalcular(venta)
 
 
 class VentaServicioViewSet(
@@ -108,90 +94,53 @@ class AdicionalViewSet(
 class CuotaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, PuedeGestionarPagos]
     filterset_params = ["venta", "estado", "cita"]
-    queryset = Cuota.objects.select_related("venta").prefetch_related("pagos")
+    queryset = selectors.cuota_list()
     serializer_class = CuotaSerializer
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["numero", "fecha_limite"]
 
     def perform_create(self, serializer):
-        venta = serializer.validated_data.get("venta")
-        if venta and not venta.editable:
-            raise ValidationError(VENTA_BLOQUEADA)
+        services.cuota_verificar_creacion(serializer.validated_data.get("venta"))
         serializer.save()
 
     def perform_update(self, serializer):
-        cuota = serializer.instance
-        nuevo_monto = serializer.validated_data.get("monto")
-        # No se puede cambiar el monto de una cuota que ya tiene pagos.
-        if (
-            nuevo_monto is not None
-            and nuevo_monto != cuota.monto
-            and cuota.pagos.exists()
-        ):
-            raise ValidationError(
-                "No se puede cambiar el monto de una cuota que ya tiene pagos."
-            )
+        services.cuota_verificar_cambio_monto(
+            cuota=serializer.instance,
+            nuevo_monto=serializer.validated_data.get("monto"),
+        )
         serializer.save()
 
     def perform_destroy(self, instance):
-        # Borrar la cuota arrastraría sus pagos (cascade). No permitido.
-        if instance.pagos.exists():
-            raise ValidationError(
-                "No se puede eliminar una cuota que ya tiene pagos "
-                "registrados. Anulá la venta si necesitás revertirla."
-            )
+        services.cuota_verificar_eliminacion(instance)
         instance.delete()
 
 
 class PagoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, PuedeGestionarPagos]
     filterset_params = ["cuota", "metodo", "validado"]
-    queryset = Pago.objects.select_related("cuota")
+    queryset = selectors.pago_list()
     serializer_class = PagoSerializer
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ["fecha_pago", "monto"]
 
     def perform_create(self, serializer):
-        cuota = serializer.validated_data.get("cuota")
-        if cuota and cuota.venta.estado == Venta.Estado.ANULADO:
-            raise ValidationError(
-                "No se pueden registrar pagos en una venta anulada."
-            )
-        # Flujo de un solo paso: el pago queda confirmado al registrarse
-        # (no hay un paso aparte de "validar").
-        from django.utils import timezone
-
-        usuario = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(
-            registrado_por=usuario,
-            validado=True,
-            validado_por=usuario,
-            fecha_validacion=timezone.now(),
-        )
+        services.pago_verificar_registrable(serializer.validated_data.get("cuota"))
+        serializer.save(**services.pago_campos_registro(self.request.user))
 
     def perform_update(self, serializer):
-        if serializer.instance.validado:
-            raise ValidationError(
-                "Un pago validado no se puede modificar. Anulá la venta si "
-                "necesitás corregirlo."
-            )
+        services.pago_verificar_mutable(serializer.instance)
         serializer.save()
 
     def perform_destroy(self, instance):
-        if instance.validado:
-            raise ValidationError(
-                "Un pago validado no se puede eliminar. Anulá la venta si "
-                "necesitás revertirlo."
-            )
+        services.pago_verificar_mutable(instance)
         instance.delete()
 
     @action(detail=True, methods=["post"])
     def validar(self, request, pk=None):
         """Valida el pago (lo marca como verificado por el usuario actual)."""
-        pago = self.get_object()
-        # Idempotente: si ya está validado, no se reescribe quién/cuándo.
-        if pago.validado:
-            return Response(self.get_serializer(pago).data)
-        usuario = request.user if request.user.is_authenticated else None
-        pago.validar(usuario=usuario, observacion=request.data.get("observacion", ""))
+        pago = services.pago_validar(
+            pago=self.get_object(),
+            usuario=request.user,
+            observacion=request.data.get("observacion", ""),
+        )
         return Response(self.get_serializer(pago).data)

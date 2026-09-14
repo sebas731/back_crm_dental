@@ -6,9 +6,9 @@ from rest_framework.response import Response
 from shared.mixins import QueryParamFilterMixin
 from shared.permissions import GestionAgenda, GestionClinica, SoloAdministrativos
 
+from . import selectors, services
 from .models import (
     AtencionCita,
-    Cita,
     HorarioAtencion,
     Medico,
     NotaAgenda,
@@ -52,9 +52,7 @@ class HorarioAtencionViewSet(viewsets.ModelViewSet):
 
 class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     filterset_params = ["paciente", "medico", "estado", "servicio", "fecha"]
-    queryset = Cita.objects.select_related(
-        "paciente", "medico", "servicio", "venta"
-    ).prefetch_related("atencion")
+    queryset = selectors.cita_list()
     serializer_class = CitaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["motivo", "paciente__numero_documento"]
@@ -68,33 +66,9 @@ class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return [GestionClinica()]
 
     def perform_create(self, serializer):
-        """
-        Al agendar una cita con servicio se genera su orden de venta (para
-        cobrar y editar). Si el servicio aún no tiene precio, la orden queda
-        en S/ 0.00 lista para completar el monto — no queda "atascada":
-        actualizar_estado la resuelve según su saldo.
-        """
+        # Al agendar una cita con servicio se genera su orden de venta.
         cita = serializer.save()
-        if cita.servicio_id:
-            from apps.ventas.models import Venta, VentaServicio
-
-            precio = cita.servicio.precio or 0
-            usuario = (
-                self.request.user if self.request.user.is_authenticated else None
-            )
-            venta = Venta.objects.create(
-                cita=cita,
-                paciente=cita.paciente,
-                tipo_pago=Venta.TipoPago.CONTADO,
-                total=precio,
-                registrado_por=usuario,
-            )
-            VentaServicio.objects.create(
-                venta=venta,
-                servicio=cita.servicio,
-                cantidad=1,
-                precio_unitario=precio,
-            )
+        services.cita_generar_orden(cita=cita, usuario=self.request.user)
 
     @action(detail=True, methods=["post"])
     def atender(self, request, pk=None):
@@ -117,14 +91,7 @@ class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        # Sincroniza el estado de la cita.
-        if data["estado"] == AtencionCita.Estado.ATENDIDO:
-            cita.estado = Cita.Estado.ATENDIDA
-        elif data["estado"] == AtencionCita.Estado.FALTO:
-            cita.estado = Cita.Estado.NO_ASISTIO
-        else:  # NO_PAGO
-            cita.estado = Cita.Estado.CANCELADA
-        cita.save(update_fields=["estado", "updated_at"])
+        services.cita_aplicar_atencion(cita=cita, estado_atencion=data["estado"])
 
         fresh = self.get_queryset().get(pk=cita.pk)
         return Response(
@@ -143,20 +110,17 @@ class AtencionCitaViewSet(viewsets.ModelViewSet):
 class NotaAgendaViewSet(viewsets.ModelViewSet):
     permission_classes = [GestionAgenda]
     serializer_class = NotaAgendaSerializer
-    queryset = NotaAgenda.objects.select_related("autor")
+    # Atributo base para que el router infiera el basename; get_queryset aplica
+    # el filtro real por fecha/rango.
+    queryset = NotaAgenda.objects.all()
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        desde = self.request.query_params.get("desde")
-        hasta = self.request.query_params.get("hasta")
-        fecha = self.request.query_params.get("fecha")
-        if fecha:
-            qs = qs.filter(fecha=fecha)
-        if desde:
-            qs = qs.filter(fecha__gte=desde)
-        if hasta:
-            qs = qs.filter(fecha__lte=hasta)
-        return qs
+        params = self.request.query_params
+        return selectors.nota_list(
+            fecha=params.get("fecha"),
+            desde=params.get("desde"),
+            hasta=params.get("hasta"),
+        )
 
     def perform_create(self, serializer):
         usuario = self.request.user if self.request.user.is_authenticated else None
