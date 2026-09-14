@@ -5,8 +5,8 @@ from rest_framework.response import Response
 
 from shared.permissions import GestionUsuarios, SoloAdministrativos
 
-from . import selectors
-from .models import UserProfile
+from ..application import selectors
+from ..models import UserProfile
 from .serializers import UserProfileSerializer, UserSerializer
 
 User = get_user_model()

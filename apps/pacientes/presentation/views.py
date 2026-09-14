@@ -3,7 +3,7 @@ from rest_framework import filters, viewsets
 from shared.mixins import QueryParamFilterMixin
 from shared.permissions import GestionClinica
 
-from .models import (
+from ..models import (
     Acompanante,
     AntecedentesPersonales,
     Cliente,

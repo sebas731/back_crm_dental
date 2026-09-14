@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 
-from . import views
+from .presentation import views
 
 router = DefaultRouter()
 router.register("clientes", views.ClienteViewSet)

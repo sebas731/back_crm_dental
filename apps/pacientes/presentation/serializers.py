@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from shared.validators import validar_archivo
 
-from .models import (
+from ..models import (
     Acompanante,
     AntecedentesPersonales,
     Cliente,

@@ -5,7 +5,7 @@ orden de venta) y registrar la atención. Mantiene la lógica fuera de las vista
 
 from apps.ventas.application.services import venta_generar_para_cita
 
-from .models import AtencionCita, Cita
+from ..models import AtencionCita, Cita
 
 
 def cita_generar_orden(*, cita: Cita, usuario=None):

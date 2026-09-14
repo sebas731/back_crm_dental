@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from shared.permissions import ROLES_ADMINISTRATIVOS
 
-from .models import UserProfile
+from ..models import UserProfile
 
 User = get_user_model()
 

@@ -3,7 +3,7 @@ Capa de LECTURA de la app citas. Concentra las consultas (joins/prefetch y
 filtros) para mantener las vistas finas.
 """
 
-from .models import Cita, NotaAgenda
+from ..models import Cita, NotaAgenda
 
 
 def cita_list():

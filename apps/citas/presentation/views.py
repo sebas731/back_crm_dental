@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from shared.mixins import QueryParamFilterMixin
 from shared.permissions import GestionAgenda, GestionClinica, SoloAdministrativos
 
-from . import selectors, services
-from .models import (
+from ..application import selectors, services
+from ..models import (
     AtencionCita,
     HorarioAtencion,
     Medico,
