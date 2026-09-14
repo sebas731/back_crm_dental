@@ -28,6 +28,10 @@ class ServicioDental(BaseModel):
         max_length=3, choices=Moneda.choices, default=Moneda.PEN
     )
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Insumos que consume/necesita este servicio (batas, materiales, etc.).
+    insumos = models.ManyToManyField(
+        "Insumo", related_name="servicios", blank=True
+    )
     duracion_minutos = models.PositiveIntegerField(
         "Duración estimada (min)", default=30
     )

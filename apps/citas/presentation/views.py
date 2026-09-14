@@ -9,7 +9,9 @@ from shared.permissions import GestionAgenda, GestionClinica, SoloAdministrativo
 from ..application import selectors, services
 from ..models import (
     AtencionCita,
+    Consultorio,
     HorarioAtencion,
+    Insumo,
     Medico,
     NotaAgenda,
     ServicioDental,
@@ -17,7 +19,9 @@ from ..models import (
 from .serializers import (
     AtencionCitaSerializer,
     CitaSerializer,
+    ConsultorioSerializer,
     HorarioAtencionSerializer,
+    InsumoSerializer,
     MedicoSerializer,
     NotaAgendaSerializer,
     ServicioDentalSerializer,
@@ -35,11 +39,29 @@ class MedicoViewSet(viewsets.ModelViewSet):
 
 class ServicioDentalViewSet(viewsets.ModelViewSet):
     permission_classes = [SoloAdministrativos]
-    queryset = ServicioDental.objects.all()
+    queryset = ServicioDental.objects.prefetch_related("insumos")
     serializer_class = ServicioDentalSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["nombre", "descripcion"]
+    search_fields = ["nombre", "descripcion", "codigo"]
     ordering_fields = ["nombre", "precio", "created_at"]
+
+
+class ConsultorioViewSet(viewsets.ModelViewSet):
+    permission_classes = [SoloAdministrativos]
+    queryset = Consultorio.objects.all()
+    serializer_class = ConsultorioSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["nombre", "ubicacion_interna"]
+    ordering_fields = ["nombre", "created_at"]
+
+
+class InsumoViewSet(viewsets.ModelViewSet):
+    permission_classes = [SoloAdministrativos]
+    queryset = Insumo.objects.all()
+    serializer_class = InsumoSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["nombre", "unidad"]
+    ordering_fields = ["nombre", "stock_actual", "created_at"]
 
 
 class HorarioAtencionViewSet(viewsets.ModelViewSet):

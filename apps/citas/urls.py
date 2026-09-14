@@ -5,6 +5,8 @@ from .presentation import views
 router = DefaultRouter()
 router.register("medicos", views.MedicoViewSet)
 router.register("servicios", views.ServicioDentalViewSet)
+router.register("consultorios", views.ConsultorioViewSet)
+router.register("insumos", views.InsumoViewSet)
 router.register("horarios", views.HorarioAtencionViewSet)
 router.register("citas", views.CitaViewSet)
 router.register("atenciones", views.AtencionCitaViewSet)
