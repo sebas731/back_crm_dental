@@ -9,6 +9,10 @@ class ServicioDental(BaseModel):
     (``padre`` nulo) agrupa subservicios que la referencian por ``padre``.
     """
 
+    class Moneda(models.TextChoices):
+        PEN = "PEN", "S/ (Soles)"
+        USD = "USD", "US$ (Dólares)"
+
     padre = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
@@ -16,8 +20,13 @@ class ServicioDental(BaseModel):
         blank=True,
         related_name="subservicios",
     )
+    # Código/SKU opcional que trae el cliente en su Excel (no es el id interno).
+    codigo = models.CharField("Código de producto", max_length=50, blank=True)
     nombre = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True)
+    moneda = models.CharField(
+        max_length=3, choices=Moneda.choices, default=Moneda.PEN
+    )
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     duracion_minutos = models.PositiveIntegerField(
         "Duración estimada (min)", default=30
