@@ -2,6 +2,7 @@ from django.db import models
 
 from shared.models import BaseModel
 
+from .consultorio import Consultorio
 from .medico import Medico
 from .servicio import ServicioDental
 
@@ -25,6 +26,15 @@ class Cita(BaseModel):
     )
     servicio = models.ForeignKey(
         ServicioDental,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="citas",
+    )
+    # Consultorio/box donde se realiza la cita. Opcional y editable; muchas
+    # citas pueden usar el mismo consultorio a lo largo del tiempo.
+    consultorio = models.ForeignKey(
+        Consultorio,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

@@ -51,7 +51,14 @@ class HorarioAtencionViewSet(viewsets.ModelViewSet):
 
 
 class CitaViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
-    filterset_params = ["paciente", "medico", "estado", "servicio", "fecha"]
+    filterset_params = [
+        "paciente",
+        "medico",
+        "estado",
+        "servicio",
+        "consultorio",
+        "fecha",
+    ]
     queryset = selectors.cita_list()
     serializer_class = CitaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]

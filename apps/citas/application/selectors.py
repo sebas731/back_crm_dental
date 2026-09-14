@@ -7,9 +7,9 @@ from ..models import Cita, NotaAgenda
 
 
 def cita_list():
-    """Citas con paciente, médico, servicio, venta y atención precargados."""
+    """Citas con paciente, médico, servicio, consultorio, venta y atención."""
     return Cita.objects.select_related(
-        "paciente", "medico", "servicio", "venta"
+        "paciente", "medico", "servicio", "consultorio", "venta"
     ).prefetch_related("atencion")
 
 
