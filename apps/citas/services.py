@@ -3,7 +3,7 @@ Capa de APLICACIÓN (casos de uso) de la app citas: agendar una cita (con su
 orden de venta) y registrar la atención. Mantiene la lógica fuera de las vistas.
 """
 
-from apps.ventas.services import venta_generar_para_cita
+from apps.ventas.application.services import venta_generar_para_cita
 
 from .models import AtencionCita, Cita
 

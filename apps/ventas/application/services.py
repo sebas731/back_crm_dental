@@ -6,28 +6,23 @@ registrar y validar pagos, y los guardas de integridad de la cobranza. Las
 vistas quedan finas y solo orquestan (parsean request → llaman a estos
 servicios → responden).
 
-Los servicios lanzan `django.core.exceptions.ValidationError`; el manejador de
-excepciones del proyecto (shared/exceptions.py) lo traduce a un 400 de DRF, de
-modo que esta capa no depende del framework web.
+Los servicios lanzan las excepciones de dominio de `apps.ventas.exceptions`
+(subclases de la `ValidationError` de Django); el manejador del proyecto
+(shared/exceptions.py) las traduce a un 400 de DRF, de modo que esta capa no
+depende del framework web.
 """
 
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import Cuota, Pago, Venta
-
-VENTA_BLOQUEADA = (
-    "La venta está bloqueada (tiene pagos validados o está anulada) y no se "
-    "pueden modificar sus servicios, adicionales ni descuentos. Duplicá la "
-    "venta para corregirla y anulá la original."
-)
+from .. import exceptions
+from ..models import Cuota, Pago, Venta
 
 
 # --- Venta -----------------------------------------------------------------
 def venta_verificar_editable(venta: Venta | None) -> None:
     """Impide modificar los factores de una venta congelada."""
     if venta and not venta.editable:
-        raise ValidationError(VENTA_BLOQUEADA)
+        raise exceptions.VentaBloqueada()
 
 
 def venta_recalcular(venta: Venta) -> None:
@@ -38,7 +33,7 @@ def venta_recalcular(venta: Venta) -> None:
 def venta_anular(*, venta: Venta, motivo: str = "") -> Venta:
     """Anula una venta (devoluciones / errores). Conserva su historial."""
     if venta.estado == Venta.Estado.ANULADO:
-        raise ValidationError("La venta ya está anulada.")
+        raise exceptions.VentaYaAnulada()
     return venta.anular(motivo=motivo)
 
 
@@ -54,7 +49,7 @@ def venta_generar_para_cita(*, cita, usuario=None) -> Venta | None:
     queda en S/ 0.00 lista para completar — no se atasca: actualizar_estado la
     resuelve según su saldo. Sin servicio, no crea nada.
     """
-    from .models import VentaServicio
+    from ..models import VentaServicio
 
     if not cita.servicio_id:
         return None
@@ -76,7 +71,7 @@ def venta_generar_para_cita(*, cita, usuario=None) -> Venta | None:
 # --- Cuota -----------------------------------------------------------------
 def cuota_verificar_creacion(venta: Venta | None) -> None:
     if venta and not venta.editable:
-        raise ValidationError(VENTA_BLOQUEADA)
+        raise exceptions.VentaBloqueada()
 
 
 def cuota_verificar_cambio_monto(*, cuota: Cuota, nuevo_monto) -> None:
@@ -86,26 +81,19 @@ def cuota_verificar_cambio_monto(*, cuota: Cuota, nuevo_monto) -> None:
         and nuevo_monto != cuota.monto
         and cuota.pagos.exists()
     ):
-        raise ValidationError(
-            "No se puede cambiar el monto de una cuota que ya tiene pagos."
-        )
+        raise exceptions.CuotaMontoConPagos()
 
 
 def cuota_verificar_eliminacion(cuota: Cuota) -> None:
     """Borrar la cuota arrastraría sus pagos (cascade). No permitido."""
     if cuota.pagos.exists():
-        raise ValidationError(
-            "No se puede eliminar una cuota que ya tiene pagos registrados. "
-            "Anulá la venta si necesitás revertirla."
-        )
+        raise exceptions.CuotaConPagos()
 
 
 # --- Pago ------------------------------------------------------------------
 def pago_verificar_registrable(cuota: Cuota | None) -> None:
     if cuota and cuota.venta.estado == Venta.Estado.ANULADO:
-        raise ValidationError(
-            "No se pueden registrar pagos en una venta anulada."
-        )
+        raise exceptions.PagoEnVentaAnulada()
 
 
 def pago_campos_registro(usuario) -> dict:
@@ -125,10 +113,7 @@ def pago_campos_registro(usuario) -> dict:
 def pago_verificar_mutable(pago: Pago) -> None:
     """Un pago validado es inmutable (no se edita ni se borra)."""
     if pago.validado:
-        raise ValidationError(
-            "Un pago validado no se puede modificar ni eliminar. Anulá la "
-            "venta si necesitás corregirlo."
-        )
+        raise exceptions.PagoInmutable()
 
 
 def pago_validar(*, pago: Pago, usuario=None, observacion: str = "") -> Pago:

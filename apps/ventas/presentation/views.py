@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from shared.mixins import QueryParamFilterMixin
 from shared.permissions import PuedeGestionarPagos
 
-from . import selectors, services
-from .models import Adicional, Descuento, VentaServicio
+from ..application import selectors, services
+from ..models import Adicional, Descuento, VentaServicio
 from .serializers import (
     AdicionalSerializer,
     CuotaSerializer,

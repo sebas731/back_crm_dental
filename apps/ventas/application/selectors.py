@@ -6,7 +6,7 @@ las vistas no armen ORM a mano y para poder reutilizarlas/optimizarlas en un
 solo lugar. No modifican datos.
 """
 
-from .models import Cuota, Pago, Venta
+from ..models import Cuota, Pago, Venta
 
 
 def venta_list():
