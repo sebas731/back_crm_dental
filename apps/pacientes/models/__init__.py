@@ -11,12 +11,14 @@ Relaciones:
 - Un Paciente tiene una HistoriaClinica (OneToOne, PROTECT).
 - HistoriaClinica tiene un HistoriaClinicaDetalle (OneToOne), N documentos,
   N odontogramas y unos AntecedentesPersonales (1:1).
+- Un Paciente tiene N Evolucion (notas de seguimiento por médico y fecha).
 """
 
 from .acompanante import Acompanante
 from .antecedentes import AntecedentesPersonales
 from .cliente import Cliente
 from .documento import DocumentoHistoriaClinica
+from .evolucion import Evolucion
 from .historia_clinica import HistoriaClinica
 from .historia_clinica_detalle import HistoriaClinicaDetalle
 from .odontograma import Odontograma
@@ -31,4 +33,5 @@ __all__ = [
     "DocumentoHistoriaClinica",
     "Odontograma",
     "AntecedentesPersonales",
+    "Evolucion",
 ]
