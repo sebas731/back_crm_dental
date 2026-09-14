@@ -7,6 +7,7 @@ from ..models import (
     AntecedentesPersonales,
     Cliente,
     DocumentoHistoriaClinica,
+    Evolucion,
     HistoriaClinica,
     HistoriaClinicaDetalle,
     Odontograma,
@@ -27,6 +28,25 @@ class AcompananteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Acompanante
         fields = "__all__"
+
+
+class EvolucionSerializer(serializers.ModelSerializer):
+    # Nombres para mostrar en la ficha sin resolver los FK en el front.
+    medico_nombre = serializers.SerializerMethodField()
+    paciente_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Evolucion
+        fields = "__all__"
+        read_only_fields = ["fecha_registro"]
+
+    def get_medico_nombre(self, obj):
+        m = obj.medico
+        return f"{m.nombres} {m.apellidos}".strip() if m else ""
+
+    def get_paciente_nombre(self, obj):
+        p = obj.paciente
+        return f"{p.nombres} {p.apellido_paterno}".strip() if p else ""
 
 
 class PacienteSerializer(serializers.ModelSerializer):

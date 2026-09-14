@@ -8,6 +8,7 @@ from ..models import (
     AntecedentesPersonales,
     Cliente,
     DocumentoHistoriaClinica,
+    Evolucion,
     HistoriaClinica,
     HistoriaClinicaDetalle,
     Odontograma,
@@ -18,6 +19,7 @@ from .serializers import (
     AntecedentesPersonalesSerializer,
     ClienteSerializer,
     DocumentoHistoriaClinicaSerializer,
+    EvolucionSerializer,
     HistoriaClinicaDetalleSerializer,
     HistoriaClinicaSerializer,
     OdontogramaSerializer,
@@ -97,3 +99,12 @@ class AntecedentesPersonalesViewSet(QueryParamFilterMixin, viewsets.ModelViewSet
     filterset_params = ["historia_clinica"]
     queryset = AntecedentesPersonales.objects.all()
     serializer_class = AntecedentesPersonalesSerializer
+
+
+class EvolucionViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [GestionClinica]
+    filterset_params = ["paciente", "medico", "cita"]
+    queryset = Evolucion.objects.select_related("paciente", "medico", "cita")
+    serializer_class = EvolucionSerializer
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ["fecha_registro", "created_at"]

@@ -11,5 +11,6 @@ router.register("historias-clinicas-detalle", views.HistoriaClinicaDetalleViewSe
 router.register("documentos", views.DocumentoHistoriaClinicaViewSet)
 router.register("odontogramas", views.OdontogramaViewSet)
 router.register("antecedentes", views.AntecedentesPersonalesViewSet)
+router.register("evoluciones", views.EvolucionViewSet)
 
 urlpatterns = router.urls
