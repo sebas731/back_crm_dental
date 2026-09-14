@@ -17,6 +17,15 @@ class Evolucion(BaseModel):
     medico = models.ForeignKey(
         "citas.Medico", on_delete=models.PROTECT, related_name="evoluciones"
     )
+    # Cita médica de la que surge la evolución (opcional: puede registrarse
+    # fuera de una cita). SET_NULL: borrar la cita no borra la evolución.
+    cita = models.ForeignKey(
+        "citas.Cita",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="evoluciones",
+    )
     evolucion = models.TextField("Evolución")
     observacion = models.TextField("Observación", blank=True)
     fecha_registro = models.DateTimeField("Fecha de registro", auto_now_add=True)
