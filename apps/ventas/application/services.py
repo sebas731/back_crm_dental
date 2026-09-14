@@ -12,6 +12,7 @@ Los servicios lanzan las excepciones de dominio de `apps.ventas.exceptions`
 depende del framework web.
 """
 
+from django.db import transaction
 from django.utils import timezone
 
 from .. import exceptions
@@ -38,8 +39,53 @@ def venta_anular(*, venta: Venta, motivo: str = "") -> Venta:
 
 
 def venta_duplicar(*, original: Venta, usuario=None) -> Venta:
-    """Crea una copia editable (sin pagos) para corregir una venta con errores."""
-    return original.duplicar(usuario=usuario)
+    """
+    Crea una copia editable (nueva venta PENDIENTE) con los mismos factores y
+    cronograma que `original`, pero SIN pagos ni validaciones. Sirve para
+    rehacer una venta registrada con errores. Es un caso de uso (crea varios
+    registros relacionados), por eso vive acá y no en el modelo.
+    """
+    from ..models import Adicional, Cuota, Descuento, VentaServicio
+
+    with transaction.atomic():
+        nueva = Venta.objects.create(
+            paciente=original.paciente,
+            tipo_pago=original.tipo_pago,
+            observaciones=original.observaciones,
+            registrado_por=usuario,
+            estado=Venta.Estado.PENDIENTE,
+        )
+        for s in original.servicios.all():
+            VentaServicio.objects.create(
+                venta=nueva,
+                servicio=s.servicio,
+                cantidad=s.cantidad,
+                precio_unitario=s.precio_unitario,
+            )
+        for d in original.descuentos.all():
+            Descuento.objects.create(
+                venta=nueva,
+                descripcion=d.descripcion,
+                tipo=d.tipo,
+                valor=d.valor,
+            )
+        for a in original.adicionales.all():
+            Adicional.objects.create(
+                venta=nueva,
+                nombre=a.nombre,
+                tipo=a.tipo,
+                valor=a.valor,
+                cantidad=a.cantidad,
+            )
+        for c in original.cuotas.all():
+            Cuota.objects.create(
+                venta=nueva,
+                numero=c.numero,
+                monto=c.monto,
+                fecha_limite=c.fecha_limite,
+            )
+        nueva.recalcular_total()
+    return nueva
 
 
 def venta_generar_para_cita(*, cita, usuario=None) -> Venta | None:

@@ -1,6 +1,9 @@
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.ventas.application.services import venta_duplicar
+from apps.ventas.models import Venta
 from shared.test_factories import make_paciente, make_user, make_venta_con_cuota
 
 
@@ -70,3 +73,23 @@ class CobranzaIntegridadTests(APITestCase):
         # El validador y la fecha no se reescriben en la segunda llamada.
         self.assertEqual(r1.data["validado_por"], r2.data["validado_por"])
         self.assertEqual(r1.data["fecha_validacion"], r2.data["fecha_validacion"])
+
+
+class VentaDuplicarServiceTests(TestCase):
+    """La lógica de duplicar vive en el service (no en el modelo); se prueba
+    directo, sin pasar por HTTP."""
+
+    def setUp(self):
+        self.paciente = make_paciente()
+        self.venta, self.cuota = make_venta_con_cuota(self.paciente, "100.00")
+
+    def test_duplicar_crea_copia_pendiente_sin_pagos(self):
+        nueva = venta_duplicar(original=self.venta)
+        # Es otra venta, con su propio número correlativo.
+        self.assertNotEqual(nueva.id, self.venta.id)
+        self.assertNotEqual(nueva.numero, self.venta.numero)
+        self.assertTrue(nueva.numero)
+        # Copia PENDIENTE, con el mismo cronograma pero sin pagos.
+        self.assertEqual(nueva.estado, Venta.Estado.PENDIENTE)
+        self.assertEqual(nueva.cuotas.count(), self.venta.cuotas.count())
+        self.assertEqual(sum(c.pagos.count() for c in nueva.cuotas.all()), 0)
